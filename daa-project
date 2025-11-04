@@ -1,0 +1,480 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import json
+import os
+import random
+
+class SmartSackOptimizer:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("SmartSack - Retail Bag Optimizer")
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        width = max(1000, int(screen_width * 0.65))
+        height = max(650, int(screen_height * 0.65))
+        self.root.geometry(f"{width}x{height}")
+        
+        
+        self.colors = {
+            'bg': '#1a1a2e',
+            'panel_bg': '#16213e',
+            'header_bg': '#0f3460',
+            'accent': '#e94560',
+            'text': '#eaeaea',
+            'subtext': '#a0a0a0',
+            'input_bg': '#0f3460',
+            'input_fg': '#eaeaea',
+            'button_bg': '#e94560',
+            'button_hover': '#c93a52',
+            'success': '#00d9ff',
+            'warning': '#ffa500',
+            'border': '#2a2a4e'
+        }
+        
+        self.root.configure(bg=self.colors['bg'])
+        self.root.minsize(720, 520)
+        self.root.resizable(True, True)
+        
+        self.items = []
+        self.load_data()
+        
+        self.create_widgets()
+        self.refresh_items_list()
+        self.update_optimize_button_state()
+        
+    def create_widgets(self):
+      
+        header = tk.Frame(self.root, bg=self.colors['header_bg'], height=50)
+        header.pack(fill='x', side='top')
+        header.pack_propagate(False)
+        
+        title = tk.Label(header, text="🛍️ SmartSack Optimizer", 
+                        font=('Arial', 18, 'bold'), fg=self.colors['text'], 
+                        bg=self.colors['header_bg'])
+        title.pack(pady=5)
+        
+        subtitle = tk.Label(header, text="", 
+                           font=('Arial', 9), fg=self.colors['subtext'], 
+                           bg=self.colors['header_bg'])
+        subtitle.pack()
+        
+        main_container = tk.Frame(self.root, bg=self.colors['bg'])
+        main_container.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        main_container.grid_rowconfigure(0, weight=1)
+        main_container.grid_columnconfigure(0, weight=2, minsize=260)
+        main_container.grid_columnconfigure(1, weight=5, minsize=360)
+        
+
+        left_panel = tk.LabelFrame(main_container, text="  📦 Add Items  ", 
+                                   font=('Arial', 11, 'bold'), bg=self.colors['panel_bg'], 
+                                   fg=self.colors['text'], padx=15, pady=15, 
+                                   relief='ridge', bd=2, borderwidth=2,
+                                   highlightbackground=self.colors['border'],
+                                   highlightcolor=self.colors['border'])
+        left_panel.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
+        left_panel.grid_columnconfigure(0, weight=1)
+        
+
+        tk.Label(left_panel, text="Item Name:", bg=self.colors['panel_bg'], 
+                font=('Arial', 10, 'bold'), fg=self.colors['text']).grid(row=0, column=0, sticky='w', pady=(5,3))
+        self.name_entry = tk.Entry(left_panel, font=('Arial', 10), relief='solid', bd=1,
+                                   bg=self.colors['input_bg'], fg=self.colors['input_fg'],
+                                   insertbackground=self.colors['text'])
+        self.name_entry.grid(row=1, column=0, sticky='ew', pady=(0, 8), ipady=4)
+        
+        tk.Label(left_panel, text="Weight (kg):", bg=self.colors['panel_bg'], 
+                font=('Arial', 10, 'bold'), fg=self.colors['text']).grid(row=2, column=0, sticky='w', pady=(5,3))
+        self.weight_entry = tk.Entry(left_panel, font=('Arial', 10), relief='solid', bd=1,
+                                     bg=self.colors['input_bg'], fg=self.colors['input_fg'],
+                                     insertbackground=self.colors['text'])
+        self.weight_entry.grid(row=3, column=0, sticky='ew', pady=(0, 8), ipady=4)
+        
+        tk.Label(left_panel, text="Value ($):", bg=self.colors['panel_bg'], 
+                font=('Arial', 10, 'bold'), fg=self.colors['text']).grid(row=4, column=0, sticky='w', pady=(5,3))
+        self.value_entry = tk.Entry(left_panel, font=('Arial', 10), relief='solid', bd=1,
+                                    bg=self.colors['input_bg'], fg=self.colors['input_fg'],
+                                    insertbackground=self.colors['text'])
+        self.value_entry.grid(row=5, column=0, sticky='ew', pady=(0, 10), ipady=4)
+        
+
+        add_btn = tk.Button(left_panel, text="➕ Add Item", command=self.add_item,
+                           bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
+                           pady=8, cursor='hand2', relief='flat', activebackground='#229954')
+        add_btn.grid(row=6, column=0, sticky='ew', pady=3)
+        
+        auto_fill_btn = tk.Button(left_panel, text="🎲 Auto Fill Random", command=self.auto_fill_random,
+                                 bg='#9b59b6', fg='white', font=('Arial', 10, 'bold'),
+                                 pady=8, cursor='hand2', relief='flat', activebackground='#8e44ad')
+        auto_fill_btn.grid(row=7, column=0, sticky='ew', pady=3)
+        
+        clear_btn = tk.Button(left_panel, text="🗑️ Clear All", command=self.clear_all,
+                             bg='#e74c3c', fg='white', font=('Arial', 10, 'bold'),
+                             pady=8, cursor='hand2', relief='flat', activebackground='#c0392b')
+        clear_btn.grid(row=8, column=0, sticky='ew', pady=3)
+        
+        separator = tk.Frame(left_panel, height=2, bg=self.colors['border'])
+        separator.grid(row=9, column=0, sticky='ew', pady=12)
+        
+        self.items_added_label = tk.Label(left_panel, text="Items Added: 0", 
+                                         bg=self.colors['panel_bg'], font=('Arial', 11, 'bold'), 
+                                         fg=self.colors['success'])
+        self.items_added_label.grid(row=10, column=0, pady=(5, 10))
+        
+        capacity_label = tk.Label(left_panel, text="🎒 Bag Capacity", 
+                                 bg=self.colors['panel_bg'], font=('Arial', 11, 'bold'), 
+                                 fg=self.colors['text'])
+        capacity_label.grid(row=11, column=0, pady=(5, 3))
+        
+        tk.Label(left_panel, text="Maximum Weight (kg):", bg=self.colors['panel_bg'],
+                font=('Arial', 9), fg=self.colors['subtext']).grid(row=12, column=0, pady=3)
+        
+        self.capacity_entry = tk.Entry(left_panel, 
+                                       font=('Arial', 12, 'bold'), justify='center',
+                                       relief='solid', bd=2,
+                                       bg=self.colors['input_bg'], fg=self.colors['input_fg'],
+                                       insertbackground=self.colors['text'])
+        self.capacity_entry.grid(row=13, column=0, sticky='ew', pady=5, ipady=6)
+        
+        self.optimize_btn = tk.Button(left_panel, text="🚀 RUN ALGORITHM", 
+                                command=self.optimize_bag,
+                                bg='#95a5a6', fg='white', 
+                                font=('Arial', 11, 'bold'),
+                                pady=12, cursor='hand2', relief='flat',
+                                state='disabled', activebackground='#7f8c8d')
+        self.optimize_btn.grid(row=14, column=0, sticky='ew', pady=(10, 5))
+        right_panel = tk.LabelFrame(main_container, text="  📋 Items & Results  ", 
+                                    font=('Arial', 11, 'bold'), bg=self.colors['panel_bg'],
+                                    fg=self.colors['text'], padx=10, pady=10, 
+                                    relief='ridge', bd=2, borderwidth=2,
+                                    highlightbackground=self.colors['border'],
+                                    highlightcolor=self.colors['border'])
+        right_panel.grid(row=0, column=1, sticky='nsew', padx=(5, 0))
+        
+        right_panel.grid_rowconfigure(1, weight=2, minsize=200)  
+        right_panel.grid_rowconfigure(4, weight=3, minsize=300)  
+        right_panel.grid_columnconfigure(0, weight=1)
+        items_header = tk.Frame(right_panel, bg=self.colors['panel_bg'])
+        items_header.grid(row=0, column=0, sticky='ew', pady=(0, 5))
+        
+        self.items_count_label = tk.Label(items_header, text="Available Items: 0", 
+                                         bg=self.colors['panel_bg'], font=('Arial', 10, 'bold'), 
+                                         fg=self.colors['success'])
+        self.items_count_label.pack(side='left')
+        
+        delete_btn = tk.Button(items_header, text="❌ Delete Selected", 
+                              command=self.delete_item,
+                              bg='#e67e22', fg='white', 
+                              font=('Arial', 9, 'bold'),
+                              padx=15, pady=5, cursor='hand2', relief='flat',
+                              activebackground='#d35400')
+        delete_btn.pack(side='right')
+        
+        tree_frame = tk.Frame(right_panel, bg=self.colors['panel_bg'])
+        tree_frame.grid(row=1, column=0, sticky='nsew', pady=(0, 5))
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+        
+        scrollbar_items = ttk.Scrollbar(tree_frame)
+        scrollbar_items.grid(row=0, column=1, sticky='ns')
+        
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure("Treeview", 
+                       background=self.colors['input_bg'],
+                       foreground=self.colors['text'],
+                       fieldbackground=self.colors['input_bg'],
+                       font=('Arial', 9), 
+                       rowheight=25)
+        style.configure("Treeview.Heading", 
+                       background=self.colors['header_bg'],
+                       foreground=self.colors['text'],
+                       font=('Arial', 10, 'bold'))
+        style.map('Treeview', background=[('selected', self.colors['accent'])])
+        
+        self.tree = ttk.Treeview(tree_frame, columns=('Name', 'Weight', 'Value', 'Ratio'),
+                                show='headings', yscrollcommand=scrollbar_items.set)
+        scrollbar_items.config(command=self.tree.yview)
+        
+        self.tree.heading('Name', text='Item Name')
+        self.tree.heading('Weight', text='Weight (kg)')
+        self.tree.heading('Value', text='Value ($)')
+        self.tree.heading('Ratio', text='Value/Weight')
+        
+        self.tree.column('Name', width=200, anchor='w')
+        self.tree.column('Weight', width=100, anchor='center')
+        self.tree.column('Value', width=100, anchor='center')
+        self.tree.column('Ratio', width=100, anchor='center')
+        
+        self.tree.grid(row=0, column=0, sticky='nsew')
+        
+        separator2 = tk.Frame(right_panel, height=2, bg=self.colors['border'])
+        separator2.grid(row=2, column=0, sticky='ew', pady=5)
+        
+        results_header = tk.Label(right_panel, text="✨ Optimization Results", 
+                                 bg=self.colors['panel_bg'], font=('Arial', 11, 'bold'), 
+                                 fg=self.colors['success'])
+        results_header.grid(row=3, column=0, sticky='w', pady=(5, 5))
+        
+        results_frame = tk.Frame(right_panel, bg=self.colors['panel_bg'])
+        results_frame.grid(row=4, column=0, sticky='nsew')
+        results_frame.grid_rowconfigure(0, weight=1)
+        results_frame.grid_columnconfigure(0, weight=1)
+        
+        results_scroll = ttk.Scrollbar(results_frame)
+        results_scroll.grid(row=0, column=1, sticky='ns')
+        
+        self.results_text = tk.Text(results_frame, 
+                                   font=('Consolas', 9), 
+                                   bg=self.colors['input_bg'],
+                                   fg=self.colors['text'],
+                                   relief='solid', borderwidth=1,
+                                   yscrollcommand=results_scroll.set, 
+                                   wrap='word',
+                                   insertbackground=self.colors['text'])
+        results_scroll.config(command=self.results_text.yview)
+        self.results_text.grid(row=0, column=0, sticky='nsew')
+        
+        welcome_msg = "Welcome to SmartSack! 🌙\n\n" + "─" * 50 + "\n\n"
+        welcome_msg += "Add items manually or use 'Auto Fill Random'\n"
+        welcome_msg += "to generate sample data.\n\n"
+        welcome_msg += "Then enter bag capacity and run the algorithm!"
+        self.results_text.insert(1.0, welcome_msg)
+        self.results_text.config(state='disabled')
+    
+    def update_optimize_button_state(self):
+        if len(self.items) > 0:
+            self.optimize_btn.config(state='normal', bg='#3498db', cursor='hand2', activebackground='#2980b9')
+        else:
+            self.optimize_btn.config(state='disabled', bg='#95a5a6', cursor='arrow')
+        
+        self.items_added_label.config(text=f"Items Added: {len(self.items)}")
+    
+    def auto_fill_random(self):
+        if self.items:
+            if not messagebox.askyesno("Confirm", "This will replace all existing items.\n\nContinue?"):
+                return
+        
+        self.items = []
+        
+        item_templates = [
+            "Premium Coffee", "Chocolate Box", "Organic Tea", "Cookies Pack", 
+            "Honey Jar", "Nuts Mix", "Dried Fruits", "Olive Oil", "Pasta",
+            "Spice Set", "Wine Bottle", "Cheese Wheel", "Jam Jar", "Candy Box",
+            "Rice Pack", "Cereal Box", "Soup Can", "Sauce Bottle", "Crackers",
+            "Granola Bar", "Protein Bar", "Energy Drink", "Juice Box", "Soda Can",
+            "Water Bottle", "Chips Bag", "Popcorn", "Pretzels", "Trail Mix",
+            "Bread Loaf", "Bagels Pack", "Muffins Box", "Cake Slice", "Donut Box",
+            "Ice Cream", "Frozen Pizza", "Burger Patties", "Hot Dogs", "Bacon Pack",
+            "Egg Carton", "Milk Carton", "Yogurt Cup", "Butter Block", "Cream Cheese"
+        ]
+        
+        selected_templates = random.sample(item_templates, 20)
+        
+        for i, name in enumerate(selected_templates, 1):
+            weight = round(random.uniform(0.1, 2.0), 2)
+            value = round(random.uniform(3.99, 25.99), 2)
+            ratio = round(value / weight, 2)
+            
+            item = {
+                'name': f"{name} ({i})",
+                'weight': weight,
+                'value': value,
+                'ratio': ratio
+            }
+            self.items.append(item)
+        
+        self.save_data()
+        self.refresh_items_list()
+        self.update_optimize_button_state()
+        messagebox.showinfo("Success", "✅ 20 random items generated!\n\nNow enter bag capacity and run the algorithm.")
+        
+    def add_item(self):
+        name = self.name_entry.get().strip()
+        weight = self.weight_entry.get().strip()
+        value = self.value_entry.get().strip()
+        
+        if not name or not weight or not value:
+            messagebox.showwarning("Input Error", "Please fill all fields!")
+            return
+        
+        try:
+            weight = float(weight)
+            value = float(value)
+            
+            if weight <= 0 or value <= 0:
+                messagebox.showwarning("Invalid Input", "Weight and value must be positive!")
+                return
+            
+            item = {
+                'name': name,
+                'weight': weight,
+                'value': value,
+                'ratio': round(value / weight, 2)
+            }
+            
+            self.items.append(item)
+            self.save_data()
+            self.refresh_items_list()
+            self.update_optimize_button_state()
+            
+            self.name_entry.delete(0, tk.END)
+            self.weight_entry.delete(0, tk.END)
+            self.value_entry.delete(0, tk.END)
+            self.name_entry.focus()
+            
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Weight and value must be numbers!")
+    
+    def delete_item(self):
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showinfo("No Selection", "Please select an item to delete!")
+            return
+        
+        item_name = self.tree.item(selection[0])['values'][0]
+        
+        if messagebox.askyesno("Confirm Delete", f"Delete '{item_name}'?"):
+            self.items = [item for item in self.items if item['name'] != item_name]
+            self.save_data()
+            self.refresh_items_list()
+            self.update_optimize_button_state()
+            messagebox.showinfo("Deleted", f"'{item_name}' has been removed!")
+    
+    def clear_all(self):
+        if messagebox.askyesno("Confirm", "Delete all items?\n\nThis will remove all items from the list."):
+            self.items = []
+            self.save_data()
+            self.refresh_items_list()
+            self.update_optimize_button_state()
+            self.results_text.config(state='normal')
+            self.results_text.delete(1.0, tk.END)
+            self.results_text.insert(1.0, "\n✅ All items cleared!\n\nAdd new items to get started.")
+            self.results_text.config(state='disabled')
+            messagebox.showinfo("Cleared", "All items have been removed!")
+    
+    def refresh_items_list(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        for item in self.items:
+            self.tree.insert('', 'end', values=(
+                item['name'],
+                f"{item['weight']:.2f}",
+                f"${item['value']:.2f}",
+                f"{item['ratio']:.2f}"
+            ))
+        
+        self.items_count_label.config(text=f"Available Items: {len(self.items)}")
+    
+    def optimize_bag(self):
+        if not self.items:
+            messagebox.showwarning("No Items", "Please add items first!")
+            return
+        
+        capacity_str = self.capacity_entry.get().strip()
+        if not capacity_str:
+            messagebox.showwarning("No Capacity", "Please enter bag capacity!")
+            self.capacity_entry.focus()
+            return
+        
+        try:
+            capacity = float(capacity_str)
+            if capacity <= 0:
+                messagebox.showwarning("Invalid Capacity", "Capacity must be positive!")
+                return
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Capacity must be a number!")
+            return
+        
+        sorted_items = sorted(self.items, key=lambda x: x['ratio'], reverse=True)
+        
+        selected = []
+        total_weight = 0
+        total_value = 0
+        
+        for item in sorted_items:
+            if total_weight + item['weight'] <= capacity:
+                selected.append(item)
+                total_weight += item['weight']
+                total_value += item['value']
+        
+        self.results_text.config(state='normal')
+        self.results_text.delete(1.0, tk.END)
+        
+        result = "\n\n"
+        result += "═" * 85 + "\n"
+        result += "                   🎯 KNAPSACK OPTIMIZATION RESULT 🎯\n"
+        result += "                     Items to Pickup from Your List\n"
+        result += "═" * 85 + "\n\n"
+        
+        if selected:
+            result += "✅ SELECTED ITEMS:\n"
+            result += "─" * 85 + "\n"
+            result += f"{'#':<4} {'Item Name':<32} {'Weight':<12} {'Value':<12} {'Ratio':<12}\n"
+            result += "─" * 85 + "\n"
+            
+            for idx, item in enumerate(selected, 1):
+                result += f"{idx:<4} {item['name']:<32} {item['weight']:<12.2f} ${item['value']:<11.2f} {item['ratio']:<12.2f}\n"
+            
+            result += "\n" + "═" * 85 + "\n"
+            result += "📊 SUMMARY:\n"
+            result += "─" * 85 + "\n"
+            result += f"✅ Items Selected:      {len(selected)} out of {len(self.items)} total items\n"
+            result += f"⚖️  Total Weight:        {total_weight:.2f} kg (Max: {capacity:.2f} kg)\n"
+            result += f"💰 Total Value:         ${total_value:.2f}\n"
+            result += f"📈 Capacity Used:       {(total_weight/capacity)*100:.1f}%\n"
+            result += f"💵 Value per kg:        ${(total_value/total_weight):.2f}\n"
+            result += f"🎯 Remaining Space:     {capacity - total_weight:.2f} kg\n"
+            result += "═" * 85 + "\n"
+            
+            unused = [item for item in sorted_items if item not in selected]
+            if unused:
+                result += f"\n❌ ITEMS LEFT BEHIND ({len(unused)} items won't fit):\n"
+                result += "─" * 85 + "\n"
+                for item in unused:
+                    result += f"   • {item['name']:<30} {item['weight']:.2f} kg | ${item['value']:.2f}\n"
+            
+            result += "\n" + "═" * 85 + "\n"
+            result += f"🎯 PICKUP the {len(selected)} items listed above for maximum value!\n"
+            result += "═" * 85 + "\n"
+        else:
+            result += "⚠️  No items fit in the bag with current capacity!\n"
+            result += "─" * 85 + "\n"
+            result += "\n💡 Try: Increase capacity or add lighter items.\n"
+        
+        self.results_text.insert(1.0, result)
+        self.results_text.config(state='disabled')
+        
+        if selected:
+            messagebox.showinfo("Optimization Complete", 
+                              f"✅ Algorithm Complete!\n\n{len(selected)} items selected\nTotal Value: ${total_value:.2f}")
+    
+    def save_data(self):
+        try:
+            with open('smartsack_data.json', 'w') as f:
+                json.dump(self.items, f, indent=2)
+        except Exception as e:
+            print(f"Error saving data: {e}")
+    
+    def load_data(self):
+        if os.path.exists('smartsack_data.json'):
+            try:
+                with open('smartsack_data.json', 'r') as f:
+                    loaded_items = json.load(f)
+                    if loaded_items:
+                        self.items = loaded_items
+                    else:
+                        self.items = []
+            except:
+                self.items = []
+        else:
+            self.items = []
+
+def main():
+    root = tk.Tk()
+    app = SmartSackOptimizer(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
